@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper: must be signed in via Google OAuth
+    function isGoogleAuth() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    match /teams/{teamId} {
+      // Only the owning Google-authenticated user can read their team doc
+      allow read: if isGoogleAuth() && request.auth.uid == teamId;
+
+      // Create is allowed once per user with valid initial state
+      allow create: if isGoogleAuth()
+        && request.auth.uid == teamId
+        && request.resource.data.keys().hasAll([
+          'currentPuzzle', 'strikes', 'startTime', 'puzzleStartTime', 'clearedSuspects'
+        ])
+        && request.resource.data.currentPuzzle == 0
+        && request.resource.data.strikes == 0
+        && request.resource.data.clearedSuspects == [];
+
+      // Updates are handled exclusively by Cloud Functions (server-side)
+      allow update: if false;
+    }
+  }
+}
